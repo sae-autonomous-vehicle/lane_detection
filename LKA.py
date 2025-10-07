@@ -107,6 +107,11 @@ VIDEO_PATH3 = "C:/Users/SHLOAK/Downloads/WhatsApp Video 2025-10-02 at 10.13.59 A
 if __name__ == '__main__':
 
     cap = cv2.VideoCapture(VIDEO_PATH1)
+    # # cap = cv2.VideoCapture(
+    # "filesrc location=/path/to/your/video.mp4 ! qtdemux ! h264parse ! nvv4l2decoder ! "
+    # "nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! "
+    # "video/x-raw, format=(string)BGR ! appsink",
+    # cv2.CAP_GSTREAMER)
 
     lane_pred = LaneDetectCUDA()
     pilot     = AutoPilot()
