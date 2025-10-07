@@ -106,7 +106,7 @@ VIDEO_PATH3 = "C:/Users/SHLOAK/Downloads/WhatsApp Video 2025-10-02 at 10.13.59 A
 
 if __name__ == '__main__':
 
-    cap = cv2.VideoCapture(VIDEO_PATH1)
+    cap = cv2.VideoCapture(0)
 
     lane_pred = LaneDetectCUDA()
     pilot     = AutoPilot()

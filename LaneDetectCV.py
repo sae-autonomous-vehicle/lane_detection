@@ -522,13 +522,20 @@ class LaneDetect():
         cv2.putText(lane_frame, f"Lighting: {lighting['condition']}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
         cv2.putText(lane_frame, f"RoC: {curve_rad:.2f} m", (lane_frame.shape[1]-300, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
         cv2.putText(lane_frame, f"OffSet: {lane_offset}", (lane_frame.shape[1]-300, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-
-
-        #cv2.polylines(lane_frame, [np.array([[302, lane_frame.shape[1]//2],[330, lane_frame.shape[1]//2]], dtype=np.int32).reshape((-1, 1, 2))], isClosed=False, color=(255,0,0), thickness=2)
-
-
+ 
+ 
+        # --- ADD THIS DEBUGGING CODE ---
+        h, w, _ = lane_frame.shape
+        # Use the exact same coordinates as in your region_of_interest function
+        roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.7)), (0, int(h * 0.7))]], dtype=np.int32)
+        # Draw a bright yellow polygon on the final frame
+        cv2.polylines(lane_frame, [roi_polygon_to_draw], isClosed=True, color=(0, 255, 255), thickness=2)
+        # --- END OF DEBUGGING CODE ---
+ 
+ 
         cv2.imshow("Lane Detection", lane_frame)
         cv2.imshow("Lane Mask", cv2.resize(lane_mask, (int(lane_mask.shape[1]*0.5), int(lane_mask.shape[0]*0.5))))
+        #cv2.polylines(lane_frame, [np.array([[302, lane_frame.shape[1]//2],[330, lane_frame.shape[1]//2]], dtype=np.int32).reshape((-1, 1, 2))], isClosed=False, color=(255,0,0), thickness=2)
 
 
         return curve_rad, lane_offset
