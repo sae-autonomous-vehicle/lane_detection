@@ -2,7 +2,7 @@
 import math
 import time
 import cv2
-from LaneDetectCV import LaneDetectCUDA
+from LaneDetectCV import LaneDetect
 import numpy as np
 
 class AutoPilot():
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     # "video/x-raw, format=(string)BGR ! appsink",
     # cv2.CAP_GSTREAMER)
 
-    lane_pred = LaneDetectCUDA()
+    lane_pred = LaneDetect()
     pilot     = AutoPilot()
     #data = DataLink()
 
