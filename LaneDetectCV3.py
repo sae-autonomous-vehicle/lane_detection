@@ -668,7 +668,7 @@ class LaneDetectCUDA:
 
         # Debug ROI polygon (visual)
         h, w, _ = lane_frame.shape
-        roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.7)), (0, int(h * 0.7))]], dtype=np.int32)
+        roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.75)), (0, int(h * 0.75))]], dtype=np.int32)
         cv2.polylines(lane_frame, [roi_polygon_to_draw], isClosed=True, color=(0, 255, 255), thickness=2)
 
         cv2.imshow("Lane Detection", lane_frame)

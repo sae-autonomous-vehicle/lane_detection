@@ -1,4 +1,4 @@
-#import smbus2 as smbus
+import smbus2 as smbus
 import math
 import time
 import cv2
@@ -70,9 +70,9 @@ class AutoPilot():
 
 
 
-'''class DataLink():
+class DataLink():
     def __init__(self):
-        self.I2C_BUS = 1
+        self.I2C_BUS = 8
         self.ARDUINO_ADDRESS = 0x08
     def send_data(self,steer: int, speed: int):
         try:
@@ -96,7 +96,7 @@ class AutoPilot():
 
         finally:
             if 'bus' in locals():
-                bus.close()'''
+                bus.close()
 
 
 VIDEO_PATH = r"C:/Users/SHLOAK/OneDrive/Pictures/Camera Roll/WIN_20250927_17_33_10_Pro.mp4"

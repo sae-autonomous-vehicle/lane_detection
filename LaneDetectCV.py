@@ -494,7 +494,7 @@ class LaneDetect():
         # --- ADD THIS DEBUGGING CODE ---
         h, w, _ = lane_frame.shape
         # Use the exact same coordinates as in your region_of_interest function
-        roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.7)), (0, int(h * 0.7))]], dtype=np.int32)
+        roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.75)), (0, int(h * 0.75))]], dtype=np.int32)
         # Draw a bright yellow polygon on the final frame
         cv2.polylines(lane_frame, [roi_polygon_to_draw], isClosed=True, color=(0, 255, 255), thickness=2)
         # --- END OF DEBUGGING CODE ---
