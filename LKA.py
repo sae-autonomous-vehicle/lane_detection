@@ -2,7 +2,7 @@
 import math
 import time
 import cv2
-from LaneDetectCV import LaneDetectCUDA
+from LaneDetectCV import LaneDetect
 import numpy as np
 
 class AutoPilot():
@@ -108,7 +108,7 @@ if __name__ == '__main__':
 
     cap = cv2.VideoCapture(0)
 
-    lane_pred = LaneDetectCUDA()
+    lane_pred = LaneDetect()
     pilot     = AutoPilot()
     #data = DataLink()
 
