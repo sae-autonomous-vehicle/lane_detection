@@ -33,8 +33,8 @@ class AutoPilot():
 
         self.curv = 0.8*self.curv + 0.2*curvature
         if 1.5 > abs(curvature) and abs(curvature) > 0.05:
-            steer = abs(self.turnControl(curvature))
-            # steer = self.turnControl(curvature)
+            # steer = abs(self.turnControl(curvature))
+            steer = self.turnControl(curvature)
             self.intg_cnt = 10
             print('Turn | ',end='')
         else:
