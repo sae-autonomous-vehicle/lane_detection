@@ -107,24 +107,20 @@ VIDEO_PATH3 = "C:/Users/SHLOAK/Downloads/WhatsApp Video 2025-10-02 at 10.13.59 A
 if __name__ == '__main__':
 
     cap = cv2.VideoCapture(0)
-    # # cap = cv2.VideoCapture(
-    # "filesrc location=/path/to/your/video.mp4 ! qtdemux ! h264parse ! nvv4l2decoder ! "
-    # "nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! "
-    # "video/x-raw, format=(string)BGR ! appsink",
-    # cv2.CAP_GSTREAMER)
 
     lane_pred = LaneDetect()
     pilot     = AutoPilot()
-    #data = DataLink()
+    data = DataLink()
+    try:
+        while True:
+            curvature, lane_offset = lane_pred.driver(cap)
+            steer = pilot.steerController(curvature, lane_offset)
 
-    while True:
-        curvature, lane_offset = lane_pred.driver(cap)
-        steer = pilot.steerController(curvature, lane_offset)
-
-        #data.send_data(steer,100)
-        print(f'curv: {curvature}, offset:{lane_offset}, steer:{steer}')
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+            data.send_data(steer,100)
+            print(f'curv: {curvature}, offset:{lane_offset}, steer:{steer}')
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        data.send_data(0,0)
+        cap.release()
+        cv2.destroyAllWindows()
