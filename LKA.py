@@ -20,7 +20,7 @@ class AutoPilot():
         self.WHEELBASE = 0.23 # meter
         self.TIRE_WIDTH= 0.02 # meter
 
-        self.P, self.I, self.D = 50, 1, 0.5
+        self.P, self.I, self.D = 150, 0, 0
         self.i, self.prev_err, self.dt0 = 0, 0, 0
         self.INTG_WINDUP = 5 # Degree max integral affect
         self.INTG_MEM = 10  
@@ -116,7 +116,7 @@ if __name__ == '__main__':
             curvature, lane_offset = lane_pred.driver(cap)
             steer = pilot.steerController(curvature, lane_offset)
 
-            data.send_data(steer,100)
+            data.send_data(steer,190)
             print(f'curv: {curvature}, offset:{lane_offset}, steer:{steer}')
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
