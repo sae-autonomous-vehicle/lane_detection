@@ -116,7 +116,7 @@ if __name__ == '__main__':
             curvature, lane_offset = lane_pred.driver(cap)
             steer = pilot.steerController(curvature, lane_offset)
 
-            data.send_data(steer,190)
+            data.send_data(steer,150)
             print(f'curv: {curvature}, offset:{lane_offset}, steer:{steer}')
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
