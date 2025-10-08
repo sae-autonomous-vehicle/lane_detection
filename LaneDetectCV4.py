@@ -9,13 +9,13 @@ class LaneDetect():
 
 
     def __init__(self):
-        self.RESIZE_WIDTH = 640
+        self.RESIZE_WIDTH = 360
         self.CENTER_DEADZONE = int(0.05 * self.RESIZE_WIDTH)
         self.SMOOTHING_FRAMES = 8
-        self.MORPH_KERNEL = (5,5)
-        self.MIN_AREA = 1200
-        self.MIN_WIDTH = 170
-        self.NUM_SAMPLES = 200  # for resampling lanes
+        self.MORPH_KERNEL = (3,3)
+        self.MIN_AREA = self.RESIZE_WIDTH * 2
+        self.MIN_WIDTH = int(self.RESIZE_WIDTH * 0.3)  # self.RESIZE_WIDTH * 0.3
+        self.NUM_SAMPLES = int(self.RESIZE_WIDTH * 0.25)  # for resampling lanes
         self.MIN_LR_CURVE_RATIO = 0.99
         self.SLOPE_THRESH = 1.73
         self.last_turn = 0      # 1: left, 0: straight, -1: right
@@ -26,8 +26,6 @@ class LaneDetect():
         self.left_line_history = deque(maxlen=self.SMOOTHING_FRAMES)
         self.right_line_history = deque(maxlen=self.SMOOTHING_FRAMES)
         self.curvature_history = deque(maxlen=self.SMOOTHING_FRAMES*2)
-        self.lane_width_history = deque(maxlen=self.SMOOTHING_FRAMES)
-
 
     # ---------- ROI ----------
     def region_of_interest(self, img):
@@ -241,7 +239,7 @@ class LaneDetect():
 
 
         w = lane_mask.shape[1]
-        center_x = w // 2;
+        center_x = w // 2
 
 
         left_candidates = nonzerox[nonzerox < center_x - self.CENTER_DEADZONE], nonzeroy[nonzerox < center_x - self.CENTER_DEADZONE]
@@ -302,43 +300,23 @@ class LaneDetect():
 
 
 
+
         left_avg = np.median(resampled_left, axis=0).astype(int) if resampled_left else None
         right_avg = np.median(resampled_right, axis=0).astype(int)[::-1] if resampled_right else None
         
-        # If we have both lanes, calculate and store the current width
-        if left_avg is not None and right_avg is not None:
-            current_width = np.mean(right_avg[:, 0] - left_avg[:, 0])
-            # Add a sanity check for the width
-            if self.MIN_WIDTH < current_width < self.RESIZE_WIDTH:
-                self.lane_width_history.append(current_width)
-
-        # Handle single lane cases
-        elif left_avg is not None and right_avg is None:
-            if self.lane_width_history:
-                avg_width = np.mean(self.lane_width_history)
-                print(f"Using left lane only - estimating right lane with avg_width: {avg_width:.0f}")
-                right_avg = left_avg.copy()
-                right_avg[:, 0] = left_avg[:, 0] + int(avg_width)
-            else:
-                # Fallback to old logic if no history
-                print("Using left lane only (fallback) - estimating right lane")
-                min_y = np.min(left_avg[:, 1])
-                max_y = np.max(left_avg[:, 1])
-                right_avg = np.array([[self.RESIZE_WIDTH-1, i] for i in np.linspace(min_y, max_y, 200)], dtype=int)
-                
+        # Handle single lane cases - create estimated opposite lane
+        if left_avg is not None and right_avg is None:
+            print("Using left lane only - estimating right lane")
+            min_y = np.min(left_avg[:, 1])
+            max_y = np.max(left_avg[:, 1])
+            right_avg = np.array([[self.RESIZE_WIDTH-1, i] for i in np.linspace(min_y, max_y, 200)], dtype=int)
+            
         elif left_avg is None and right_avg is not None:
-            if self.lane_width_history:
-                avg_width = np.mean(self.lane_width_history)
-                print(f"Using right lane only - estimating left lane with avg_width: {avg_width:.0f}")
-                left_avg = right_avg.copy()
-                left_avg[:, 0] = right_avg[:, 0] - int(avg_width)
-            else:
-                # Fallback to old logic if no history
-                print("Using right lane only (fallback) - estimating left lane")
-                min_y = np.min(right_avg[:, 1])
-                max_y = np.max(right_avg[:, 1])
-                left_avg = np.array([[0, i] for i in np.linspace(min_y, max_y, 200)], dtype=int)
-                
+            print("Using right lane only - estimating left lane") 
+            min_y = np.min(right_avg[:, 1])
+            max_y = np.max(right_avg[:, 1])
+            left_avg = np.array([[0, i] for i in np.linspace(min_y, max_y, 200)], dtype=int)
+            
         elif left_avg is None and right_avg is None:
             print("No lanes detected")
             return frame, None, None
@@ -347,8 +325,19 @@ class LaneDetect():
         # polygon for drivable area
         pts = np.vstack((left_avg, right_avg))
         area = cv2.contourArea(pts)
-        avg_width = np.mean(np.abs(right_avg[:, 0] - left_avg[:, 0]))
-        
+        min_len = min(len(left_avg), len(right_avg))
+
+        if min_len == 0:
+            return frame, left_avg, right_avg  # No lanes detected, just return
+
+        # Resample both arrays to have the same number of points
+        left_resampled = np.linspace(0, len(left_avg) - 1, min_len).astype(int)
+        right_resampled = np.linspace(0, len(right_avg) - 1, min_len).astype(int)
+
+        left_sync = left_avg[left_resampled]
+        right_sync = right_avg[right_resampled]
+
+        avg_width = np.mean(np.abs(right_sync[:, 0] - left_sync[:, 0]))
         
         # Relax constraints for single lane detection
         min_area_threshold = self.MIN_AREA * 0.3 if (len(resampled_left) == 0 or len(resampled_right) == 0) else self.MIN_AREA
@@ -391,78 +380,138 @@ class LaneDetect():
 
 
     def draw_center_line_polynomial(self, frame, left_pts, right_pts, inverse_matrix):
+        # Handle missing lanes safely
         if left_pts is None or right_pts is None:
-            # If no lanes, return previous state or default values
-            return frame, self.left_line_history[-1] if self.left_line_history else None, self.right_line_history[-1] if self.right_line_history else None, -1, 0
+            return frame, (
+                self.left_line_history[-1] if self.left_line_history else None
+            ), (
+                self.right_line_history[-1] if self.right_line_history else None
+            ), -1, 0
 
-        smooth_left  = self.smooth_with_polynomial(left_pts)
+        # Smooth individual lanes
+        smooth_left = self.smooth_with_polynomial(left_pts)
         smooth_right = self.smooth_with_polynomial(right_pts)
 
-        if smooth_left is None or smooth_right is None or len(smooth_left) < 2 or len(smooth_right) < 2:
+        if (
+            smooth_left is None
+            or smooth_right is None
+            or len(smooth_left) < 2
+            or len(smooth_right) < 2
+        ):
             return frame, None, None, -1, 0
+
+        # --- Ensure consistent lengths before storing in history ---
+        target_len = 100  # fixed number of samples for averaging stability
+        def resample_points(points, n=target_len):
+            if len(points) < 2:
+                return points
+            idxs = np.linspace(0, len(points) - 1, n).astype(int)
+            return points[idxs]
+
+        smooth_left = resample_points(smooth_left)
+        smooth_right = resample_points(smooth_right)
 
         self.left_line_history.append(smooth_left)
         self.right_line_history.append(smooth_right)
 
-        avg_left = np.mean(self.left_line_history, axis=0).astype(np.int32)
-        avg_right = np.mean(self.right_line_history, axis=0).astype(np.int32)
-        
+        # Limit history size to avoid memory growth
+        max_hist = 8
+        if len(self.left_line_history) > max_hist:
+            self.left_line_history.pop(0)
+        if len(self.right_line_history) > max_hist:
+            self.right_line_history.pop(0)
+
+        # --- Compute safe averages ---
+        avg_left = np.mean(np.array(self.left_line_history), axis=0).astype(np.int32)
+        avg_right = np.mean(np.array(self.right_line_history), axis=0).astype(np.int32)
+
         # --- START OF MODIFICATIONS ---
 
-        # Define the control point (look-ahead point) y-coordinate. 
-        # The bottom of the image is frame.shape[0]. We choose a point slightly above it.
         h, w = frame.shape[:2]
-        look_ahead_y = h * 0.95 # Control point is 95% down the warped image
+        look_ahead_y = h * 0.95  # look-ahead control point (95% of frame height)
 
-        # Interpolate to find the x-coordinates of left and right lanes at our look-ahead point
-        # We need to handle cases where the look_ahead_y is outside the detected lane's y-range
+        # Sort points by y before interpolation
         left_y_vals = avg_left[:, 1]
         left_x_vals = avg_left[:, 0]
-        
         right_y_vals = avg_right[:, 1]
         right_x_vals = avg_right[:, 0]
 
-        # Ensure y-values are sorted for interpolation
         left_sort_idx = np.argsort(left_y_vals)
         right_sort_idx = np.argsort(right_y_vals)
 
-        # Use interpolation to find the precise x-position of each lane at the look_ahead_y
-        left_x_at_lookahead = np.interp(look_ahead_y, left_y_vals[left_sort_idx], left_x_vals[left_sort_idx])
-        right_x_at_lookahead = np.interp(look_ahead_y, right_y_vals[right_sort_idx], right_x_vals[right_sort_idx])
+        left_x_at_lookahead = np.interp(
+            look_ahead_y, left_y_vals[left_sort_idx], left_x_vals[left_sort_idx]
+        )
+        right_x_at_lookahead = np.interp(
+            look_ahead_y, right_y_vals[right_sort_idx], right_x_vals[right_sort_idx]
+        )
 
-        # Calculate the center of the lane at that specific point
+        # Compute lane center and offset
         center_x_at_lookahead = (left_x_at_lookahead + right_x_at_lookahead) / 2.0
-        
-        # Calculate the new lane offset based on this point
         lane_offset = round((w / 2 - center_x_at_lookahead) / w, 3)
 
-        # Calculate curvature at this new look-ahead point as well
-        l_curve, _ = self.calculate_curvature(avg_left, y_eval=look_ahead_y)
-        r_curve, _ = self.calculate_curvature(avg_right, y_eval=look_ahead_y)
-        
+        # --- Safe curvature calculation ---
+        def safe_curvature(points, y_eval):
+            try:
+                curve, _ = self.calculate_curvature(points, y_eval=y_eval)
+                if np.isnan(curve) or np.isinf(curve):
+                    return 1e6  # treat as straight
+                if abs(curve) > 1e8:
+                    curve = np.sign(curve) * 1e8
+                return curve
+            except Exception:
+                return 1e6
+
+        l_curve = safe_curvature(avg_left, look_ahead_y)
+        r_curve = safe_curvature(avg_right, look_ahead_y)
+
         # --- END OF MODIFICATIONS ---
 
         self.curvature_history.append(max(min(-(l_curve + r_curve) / 2, 1e8), -1e8))
+        if len(self.curvature_history) > 8:
+            self.curvature_history.popleft()
         curvature = round(np.mean(self.curvature_history), 3)
-        
+
         self.last_turn = np.sign(curvature)
 
-        # The rest of the function remains for visualization purposes
-        center_pts = np.array([[(lx + rx) // 2, y] for (lx, y), (rx, _) in zip(avg_left, avg_right)], np.int32)
+        # --- Visualization section ---
+        center_pts = np.array(
+            [[(lx + rx) // 2, y] for (lx, y), (rx, _) in zip(avg_left, avg_right)], np.int32
+        )
         smooth_center = self.smooth_with_polynomial(center_pts)
-        
-        lane_img = np.zeros_like(frame)
 
+        lane_img = np.zeros_like(frame)
         drivable_area_pts = np.vstack((avg_left, np.flipud(avg_right)))
         cv2.fillPoly(lane_img, [drivable_area_pts.astype(np.int32)], (0, 255, 0))
 
-        cv2.polylines(lane_img, [smooth_center.reshape((-1, 1, 2)).astype(np.int32)], isClosed=False, color=(0, 0, 255), thickness=3)
-        cv2.polylines(lane_img, [avg_left.reshape((-1, 1, 2)).astype(np.int32)], isClosed=False, color=(255, 0, 0), thickness=3)
-        cv2.polylines(lane_img, [avg_right.reshape((-1, 1, 2)).astype(np.int32)], isClosed=False, color=(255, 0, 0), thickness=3)
+        cv2.polylines(
+            lane_img,
+            [smooth_center.reshape((-1, 1, 2)).astype(np.int32)],
+            isClosed=False,
+            color=(0, 0, 255),
+            thickness=3,
+        )
+        cv2.polylines(
+            lane_img,
+            [avg_left.reshape((-1, 1, 2)).astype(np.int32)],
+            isClosed=False,
+            color=(255, 0, 0),
+            thickness=3,
+        )
+        cv2.polylines(
+            lane_img,
+            [avg_right.reshape((-1, 1, 2)).astype(np.int32)],
+            isClosed=False,
+            color=(255, 0, 0),
+            thickness=3,
+        )
 
-        dewarped_lanes = cv2.warpPerspective(lane_img, inverse_matrix, (frame.shape[1], frame.shape[0]))
+        # Warp back to original perspective
+        dewarped_lanes = cv2.warpPerspective(
+            lane_img, inverse_matrix, (frame.shape[1], frame.shape[0])
+        )
         final_frame = cv2.addWeighted(frame, 1, dewarped_lanes, 0.3, 0)
-        
+
         return final_frame, avg_left, avg_right, lane_offset, curvature
 
 
@@ -483,7 +532,11 @@ class LaneDetect():
         try:
             # Use provided fit if available, otherwise calculate a new one
             fit_cr = fit if len(fit)>0 else np.polyfit(pts[:,1]*ym_per_pix, pts[:,0]*xm_per_pix, 2)
-            curverad = ((1 + (2*fit_cr[0]*y_eval*ym_per_pix + fit_cr[1])**2)**1.5) / np.absolute(2*fit_cr[0])
+            if np.abs(fit_cr[0]) < 1e-6:
+                curverad = 1e6  # assume very large (almost straight line)
+            else:
+                curverad = ((1 + (2*fit_cr[0]*y_eval*ym_per_pix + fit_cr[1])**2)**1.5) / np.absolute(2*fit_cr[0])
+
             return curverad, fit_cr
         except np.linalg.LinAlgError:
             return 0, []
@@ -511,11 +564,11 @@ class LaneDetect():
         lane_frame, smoothl, smoothr, lane_offset, curve_rad = self.draw_center_line_polynomial(lane_frame, left_avg, right_avg, inverse_matrix)
         
         t1 = time.time()
-        cv2.putText(lane_frame, f"FPS: {round(1/(t1-t0+1e-8), 2)}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-        cv2.putText(lane_frame, f"Lighting: {lighting['condition']}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-        cv2.putText(lane_frame, f"RoC: {curve_rad:.2f} m", (lane_frame.shape[1]-300, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-        cv2.putText(lane_frame, f"OffSet: {lane_offset}", (lane_frame.shape[1]-300, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
- 
+        cv2.putText(lane_frame, f"FPS: {round(1/(t1-t0+1e-8), 2)}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
+        cv2.putText(lane_frame, f"Lighting: {lighting['condition']}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
+        cv2.putText(lane_frame, f"RoC: {curve_rad:.2f} m", (lane_frame.shape[1]-0, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
+        cv2.putText(lane_frame, f"OffSet: {lane_offset}", (lane_frame.shape[1]-150, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
+        
  
         # --- ADD THIS DEBUGGING CODE ---
         h, w, _ = lane_frame.shape
@@ -523,15 +576,6 @@ class LaneDetect():
         roi_polygon_to_draw = np.array([[(0, int(h * 0.90)), (w, int(h * 0.90)), (w, int(h * 0.7)), (0, int(h * 0.7))]], dtype=np.int32)
         # Draw a bright yellow polygon on the final frame
         cv2.polylines(lane_frame, [roi_polygon_to_draw], isClosed=True, color=(0, 255, 255), thickness=2)
-        
-        # --- Add visualization for perspective transform ---
-        src_points = np.float32([
-            [w * 0.20, h * 0.7],
-            [w * 0.80, h * 0.7],
-            [w, h * 0.9],
-            [0, h * 0.9]
-        ])
-        cv2.polylines(lane_frame, [np.int32(src_points)], isClosed=True, color=(255, 0, 0), thickness=2)
         # --- END OF DEBUGGING CODE ---
  
  
